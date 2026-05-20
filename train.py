@@ -36,9 +36,9 @@ from fishsegdet import (
     get_train_transforms,
     get_val_transforms,
     get_heavy_transforms,
-    generate_masks_from_bboxes,
     FishSegDetInference,
     BRACKISH_CLASSES,
+    USISDataset,
 )
 
 try:
@@ -483,9 +483,9 @@ def evaluate(weights, data_root, device="cuda"):
     from torchmetrics.detection.mean_ap import MeanAveragePrecision
     from torchmetrics.classification import MulticlassJaccardIndex
 
-    DatasetClass, _ = configure_dataset(data_root)
+    configure_dataset(data_root)
     inf = FishSegDetInference(weights, device=device)
-    ds  = DatasetClass(data_root, "test", 640, get_val_transforms(640))
+    ds  = USISDataset(data_root, "test", 640, get_val_transforms(640))
     print(f"Evaluating {len(ds)} images...")
 
     mm = MeanAveragePrecision(box_format="xyxy", iou_type="bbox",
@@ -531,7 +531,7 @@ def evaluate(weights, data_root, device="cuda"):
 def main():
     pa = argparse.ArgumentParser("FishSegDet")
     pa.add_argument("--data",           default="./USISDataset")
-    pa.add_argument("--generate-masks", action="store_true")
+
     pa.add_argument("--batch-size",     type=int, default=16)
     pa.add_argument("--img-size",       type=int, default=640)
     pa.add_argument("--device",         default="cuda" if torch.cuda.is_available() else "cpu")
@@ -570,10 +570,6 @@ def main():
         torch.backends.cuda.matmul.allow_tf32       = True
         torch.backends.cudnn.allow_tf32             = True
 
-    if a.generate_masks:
-        for s in ["train", "val", "test"]:
-            generate_masks_from_bboxes(a.data, s)
-        return
 
     if a.eval:
         if not a.weights:
