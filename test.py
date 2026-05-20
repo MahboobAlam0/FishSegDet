@@ -44,9 +44,9 @@ matplotlib.rcParams.update({
 })
 
 # ── project imports ────────────────────────────────────────────────────────────
-from main import (
+from fishsegdet import (
     CFG,
-    LiteFishSegInference,
+    FishSegDetInference as LiteFishSegInference,
     BRACKISH_CLASSES,
     COLORS,
     configure_dataset,
@@ -549,9 +549,11 @@ def _load_class_names_from_ckpt(ckpt_path):
     CFG.num_classes = len(classes)
     BRACKISH_CLASSES.clear()
     BRACKISH_CLASSES.update({i: n for i, n in enumerate(classes)})
-    from main import _make_palette
+    import numpy as np
+    np.random.seed(42)
     COLORS.clear()
-    COLORS.extend(_make_palette(CFG.num_classes))
+    COLORS.extend([tuple(int(x) for x in np.random.randint(50, 230, 3))
+                   for _ in range(CFG.num_classes)])
     return cfg_ck
 
 

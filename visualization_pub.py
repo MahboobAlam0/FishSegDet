@@ -57,9 +57,9 @@ matplotlib.rcParams.update({
 })
 
 # ── project imports ───────────────────────────────────────────────────────────
-from main import (
+from fishsegdet import (
     CFG,
-    LiteFishSegInference,
+    FishSegDetInference as LiteFishSegInference,
     BRACKISH_CLASSES,
     COLORS,
     configure_dataset,

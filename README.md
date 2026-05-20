@@ -183,10 +183,28 @@ Outputs colorblind-safe overlays (Paul Tol palette) with feathered mask edges on
 
 ```
 FishSegDet/
-├── main.py               # Model, datasets, losses, inference engine
-├── train.py              # Training loop, optimizer, scheduler, logging
-├── test.py               # Evaluation and single-image inference
-├── visualization_pub.py  # Publication-quality figure generation
+├── fishsegdet/               # Core package
+│   ├── config.py             # Config dataclass, global CFG, class maps, colours
+│   ├── models/
+│   │   ├── blocks.py         # ConvBN, DWConv (shared building blocks)
+│   │   ├── backbone.py       # TimmBackbone (ConvNeXtV2), SwinBackbone
+│   │   ├── neck.py           # BiFPN — bidirectional multi-scale feature pyramid
+│   │   ├── heads.py          # DetectHead (DFL), ASPP, FPNSegHead
+│   │   └── detector.py       # FishSegDet end-to-end model, build_model()
+│   ├── data/
+│   │   ├── preprocessing.py  # UnderwaterPreprocessor (WB → CLAHE → gamma)
+│   │   ├── augmentations.py  # get_train / get_val / get_heavy transforms
+│   │   ├── datasets.py       # BrackishDataset (YOLO), USISDataset (COCO), MosaicDataset
+│   │   └── loaders.py        # configure_dataset(), create_dataloaders()
+│   ├── losses/
+│   │   └── detection.py      # FishSegDetLoss (TAL + DFL + IoU-aware cls + Dice)
+│   ├── engine/
+│   │   └── inference.py      # FishSegDetInference — preprocess, DFL decode, NMS, visualize
+│   └── utils/
+│       └── masks.py          # generate_masks_from_bboxes()
+├── train.py                  # Training entry point (phases, AMP, EMA, CSV logging)
+├── test.py                   # Evaluation + single-image / folder inference
+├── visualization_pub.py      # Publication-quality result figures (IEEE / Springer)
 ├── requirements.txt
 └── README.md
 ```
