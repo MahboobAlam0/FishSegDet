@@ -124,6 +124,51 @@ FishSegDet outperforms YOLOv11l-seg by **+2.7 pp mAP**, **+7.1 pp mAP₅₀**, *
 
 ---
 
+## Visual Results
+
+Each panel shows **Input image · Ground truth mask · Model prediction** (segmentation overlay + bounding box).
+
+<table>
+  <tr>
+    <td align="center">
+      <b>Atlantic Spadefish</b><br>
+      <img src="assets/AtlanticSpadefish0270053_collage.png" alt="Atlantic Spadefish">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>Chromis Dimidiata</b><br>
+      <img src="assets/ChromisDimidiata0300054_collage.png" alt="Chromis Dimidiata">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>Common Octopus</b><br>
+      <img src="assets/CommonOctopus0900119_collage.png" alt="Common Octopus">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>Convict Surgeonfish</b><br>
+      <img src="assets/ConvictSurgeonfish0650055_collage.png" alt="Convict Surgeonfish">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>Dolphin</b><br>
+      <img src="assets/Dolphin1110037_collage.png" alt="Dolphin">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>Enoplosus Armatus</b><br>
+      <img src="assets/EnoplosusArmatus0220060_collage.png" alt="Enoplosus Armatus">
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Quick Start
 
 ### Installation
