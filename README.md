@@ -37,42 +37,32 @@ Trained end-to-end on **USIS16K** with a 3-phase curriculum strategy and class-b
 
 ## Architecture
 
-```
-Input (640 × 640, BGR)
-        │
-        ▼
-┌──────────────────────┐
-│  UnderwaterPreproc.  │  Gray-world white balance → CLAHE → gamma LUT
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   ConvNeXtV2-Large   │  FCMAE pre-trained on IN-22K → fine-tuned IN-1K @ 384px
-│   (timm backbone)    │  Outputs: C3 (stride 8), C4 (stride 16), C5 (stride 32)
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   BiFPN  (3 × 256ch) │  4 levels P3–P6. Bidirectional weighted fusion.
-│                      │  Learnable per-edge weights normalised with fast softmax.
-└──────────┬───────────┘
-           │
-    ┌──────┴──────┐
-    ▼             ▼
-┌─────────┐  ┌────────────────┐
-│ Detect  │  │   Segment      │
-│  Head   │  │    Head        │
-│         │  │                │
-│  4-conv │  │  Fuse P3–P6   │
-│  tower  │  │  → ASPP(6/12/ │
-│  ──     │  │    18/global) │
-│  cls:   │  │  → ProtoNet   │
-│   nc    │  │  → SemNet     │
-│  reg:   │  │  (128-d mask  │
-│  4×17   │  │   prototypes) │
-│  (DFL)  │  │               │
-└─────────┘  └────────────────┘
-```
+### Overview
+
+![FishSegDet Architecture](assets/architecture_overview.png)
+
+### Component Diagrams
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <b>Backbone — ConvNeXtV2-Large</b><br><br>
+      <img src="assets/architecture_backbone.png" alt="ConvNeXtV2 Backbone">
+    </td>
+    <td align="center" width="50%">
+      <b>Neck — BiFPN (×3 repeats, 256ch, P3–P6)</b><br><br>
+      <img src="assets/architecture_neck.png" alt="BiFPN Neck">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <b>Heads — DFL Detection (TAL + IoU-aware cls) &amp; FPN+ASPP Segmentation</b><br><br>
+      <img src="assets/architecture_heads.png" alt="Detection and Segmentation Heads">
+    </td>
+  </tr>
+</table>
+
+### Design Decisions
 
 | Component | Choice | Why |
 |---|---|---|
