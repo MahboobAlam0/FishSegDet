@@ -1,111 +1,133 @@
+<div align="center">
+
 # FishSegDet
 
-**Joint Instance Detection and Segmentation for Underwater Fish**
+### End-to-End Joint Detection and Instance Segmentation for Underwater Marine Life
 
-FishSegDet is a high-accuracy, single-stage model that simultaneously detects and segments fish in challenging underwater imagery. It combines a heavyweight ConvNeXtV2 backbone with a BiFPN feature pyramid, a Distribution Focal Loss (DFL) detection head, and an FPN+ASPP segmentation head — trained end-to-end with Task-Aligned Label Assignment.
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![timm](https://img.shields.io/badge/backbone-timm-blueviolet)](https://github.com/huggingface/pytorch-image-models)
+[![Dataset: USIS16K](https://img.shields.io/badge/dataset-USIS16K-teal)](https://github.com/LiamLian0852/USIS10K)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+</div>
+
+---
+
+## The Problem
+
+Detecting and segmenting fish in underwater imagery is substantially harder than in standard benchmarks. Water selectively absorbs red wavelengths, shifting colour toward blue-green and destroying the visual cues models pre-trained on ImageNet rely on. Turbidity, caustics, backscatter, and camouflage further degrade contrast, while class imbalance is severe — common species appear thousands of times, rare ones a handful. Applications from autonomous underwater vehicles to marine biodiversity monitoring require **both bounding-box localisation** (for tracking) **and pixel-level masks** (for biomass estimation, morphometric analysis) — treating them as separate problems is inefficient and ignores the signal each task provides to the other.
+
+FishSegDet addresses all of this in a single forward pass.
+
+---
+
+## What It Does
+
+FishSegDet is a **single-stage, end-to-end model** that simultaneously:
+
+- Predicts bounding boxes for every marine animal in the frame using **Distribution Focal Loss** regression
+- Assigns each box to a class using **IoU-aware soft labels**, so the confidence score reflects localisation quality, not just category recognition
+- Produces a full-resolution semantic segmentation mask via an **FPN + ASPP** decoder
+- Runs underwater-specific preprocessing (white balance → CLAHE → gamma) before any augmentation
+
+Trained end-to-end on **USIS16K** with a 3-phase curriculum strategy and class-balanced sampling.
 
 ---
 
 ## Architecture
 
 ```
-Input Image (640×640)
-       │
-       ▼
-┌─────────────────────────────┐
-│  UnderwaterPreprocessor     │  White balance · CLAHE · Gamma correction
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│  Backbone: ConvNeXtV2-Large │  Pre-trained on IN-22K → IN-1K @ 384px
-│  (timm: fcmae_ft_in22k_...)  │  Extracts C3, C4, C5 feature maps
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│  Neck: BiFPN  (3 repeats)   │  256-channel, 4 FPN levels P3–P6
-│  Bidirectional feature      │  Fuses multi-scale context top-down
-│  fusion with learned weights│  and bottom-up
-└──────────────┬──────────────┘
-               │
-       ┌───────┴───────┐
-       ▼               ▼
-┌────────────┐  ┌──────────────────┐
-│  Detection │  │  Segmentation    │
-│  Head      │  │  Head            │
-│            │  │                  │
-│ DFL: 4×17  │  │ FPN + ASPP       │
-│   logits   │  │ (dilations 6,12, │
-│ per anchor │  │  18, global avg) │
-│            │  │                  │
-│ IoU-aware  │  │ 128-d prototype  │
-│ cls score  │  │ + per-instance   │
-│ (no ctrns) │  │   mask coeff     │
-└────────────┘  └──────────────────┘
+Input (640 × 640, BGR)
+        │
+        ▼
+┌──────────────────────┐
+│  UnderwaterPreproc.  │  Gray-world white balance → CLAHE → gamma LUT
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│   ConvNeXtV2-Large   │  FCMAE pre-trained on IN-22K → fine-tuned IN-1K @ 384px
+│   (timm backbone)    │  Outputs: C3 (stride 8), C4 (stride 16), C5 (stride 32)
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│   BiFPN  (3 × 256ch) │  4 levels P3–P6. Bidirectional weighted fusion.
+│                      │  Learnable per-edge weights normalised with fast softmax.
+└──────────┬───────────┘
+           │
+    ┌──────┴──────┐
+    ▼             ▼
+┌─────────┐  ┌────────────────┐
+│ Detect  │  │   Segment      │
+│  Head   │  │    Head        │
+│         │  │                │
+│  4-conv │  │  Fuse P3–P6   │
+│  tower  │  │  → ASPP(6/12/ │
+│  ──     │  │    18/global) │
+│  cls:   │  │  → ProtoNet   │
+│   nc    │  │  → SemNet     │
+│  reg:   │  │  (128-d mask  │
+│  4×17   │  │   prototypes) │
+│  (DFL)  │  │               │
+└─────────┘  └────────────────┘
 ```
 
-| Component | Choice | Notes |
-|-----------|--------|-------|
-| Backbone | ConvNeXtV2-Large | `timm` pretrained on IN-22K+IN-1K @ 384px |
-| Neck | BiFPN × 3 | 256 channels, 4 levels (P3–P6), learnable fusion weights |
-| Detection | DFL + TAL | reg_max=16, topk=13, IoU-weighted cls (no centerness) |
-| Segmentation | FPN + ASPP | ASPP dilations 6/12/18 + global pool, 128-d mask prototypes |
-| Assignment | TAL | Alignment metric: cls^0.5 × IoU^6.0 |
-| Box loss | CIoU | |
-| Cls loss | IoU-weighted soft labels (VFL-style) | |
-| Seg loss | CE + Dice (1.5×) | |
+| Component | Choice | Why |
+|---|---|---|
+| Backbone | ConvNeXtV2-Large | Pure-conv architecture maintains translation equivariance critical for detecting fish at arbitrary positions; FCMAE pre-training is superior for dense prediction |
+| Neck | BiFPN × 3, 256ch, P3–P6 | Bidirectional fusion with learnable weights outperforms top-down-only FPN; 4 levels cover strides 8–64 for fish from a few pixels to full-frame |
+| Detection | DFL, reg\_max=16 | Models box regression as a probability distribution over discrete offsets — directly captures the localisation ambiguity caused by blurry underwater edges |
+| Assignment | TAL, topk=13 | Joint cls–reg alignment metric (cls^α × IoU^β) selects anchors that are simultaneously well-classified and well-localised, unlike FCOS which uses a fixed spatial radius |
+| Classification | IoU-aware soft labels | Training target = IoU value; inference score = sigmoid(cls) × predicted\_IoU, so high-confidence detections are guaranteed to be well-localised |
+| Box loss | CIoU | Penalises centre-distance and aspect-ratio deviation, not just overlap area |
+| Segmentation | FPN + ASPP + prototype | ASPP dilations (6, 12, 18, global) capture multi-scale context without the resolution loss of pooling |
+| Seg loss | CE + Dice (λ=1.5) | Dice directly optimises the F1-overlap metric; CE provides per-pixel supervision |
 
 ---
 
-## Key Features
+## Training Strategy
 
-- **DFL detection** — models box regression as a probability distribution over discrete offsets, improving accuracy on small and partially occluded fish
-- **TAL (Task-Aligned Label Assignment)** — unified metric aligns classification and regression objectives during training, replacing separate centerness
-- **IoU-aware classification** — score at inference is `sigmoid(cls) × predicted_IoU`, matching the training target directly
-- **Underwater-specific preprocessing** — gray-world white balance → CLAHE → gamma LUT applied per-image before augmentation
-- **Class-balanced sampler** — inverse-sqrt-frequency weighting prevents majority-class dominance in multi-class datasets
-- **Mosaic augmentation** — 4-image mosaic in Phase 2 for scale and context diversity
-- **4-level FPN (P3–P6)** — covers strides 8, 16, 32, 64 for fish ranging from a few pixels to full-frame
+### 3-Phase Curriculum
 
----
+| Phase | Epochs | Backbone | Augmentation | Backbone LR | Head LR |
+|---|---|---|---|---|---|
+| 1 | 60 | Frozen | Geometry + mild colour | — | 3e-4 |
+| 2 | 40 | Unfrozen | Heavy (mosaic, fog, motion blur, coarse dropout) | 2e-5 | 3e-4 |
+| 3 | 40 | Unfrozen | Same as Phase 2 | 2e-5 | 3e-4 |
 
-## Training Schedule
+**Rationale:** Freezing the backbone in Phase 1 prevents the pre-trained features from being corrupted before the randomly-initialised heads have stabilised. Differential learning rates in Phases 2–3 prevent catastrophic forgetting of the ImageNet representations.
 
-| Phase | Epochs | Backbone | Augmentation | LR (backbone / head) |
-|-------|--------|----------|--------------|----------------------|
-| 1 | 60 | Frozen | Geometry + mild colour | 2e-5 / 3e-4 |
-| 2 | 40 | Unfrozen | Heavy (mosaic, fog, motion blur) | 2e-5 / 3e-4 |
-| 3 | 40 | Unfrozen | Reserved / custom | 2e-5 / 3e-4 |
+### Additional Training Details
 
-Warmup: 10 epochs cosine warm-up then cosine-annealing decay.
-
----
-
-## Dataset
-
-[USIS16K](https://github.com/LiamLian0852/USIS10K) — underwater instance segmentation, COCO format.
-
-Expected directory layout:
-```
-USIS16K/
-├── train/
-│   └── <images>
-├── val/
-│   └── <images>
-├── test/
-│   └── <images>
-└── annotations/
-    ├── instances_train.json
-    ├── instances_val.json
-    └── instances_test.json
-```
-
-Class names are loaded automatically from the annotation file on startup — no manual config needed.
+- **Scheduler:** 10-epoch cosine warm-up → cosine annealing decay per phase
+- **Class-balanced sampler:** Per-sample weight = 1/√class\_freq of the rarest class in the image. Prevents the model from ignoring rare marine species.
+- **Mosaic augmentation:** 4-image mosaic (Phase 2+) — forces the model to handle fragmented objects and non-standard scales.
+- **Optimiser:** AdamW with fused CUDA kernels, weight decay 0.05
+- **AMP + GradScaler:** Mixed precision on every forward/backward
+- **EMA:** Exponential moving average (decay=0.9999) on a CPU shadow copy; final checkpoint uses EMA weights
 
 ---
 
-## Installation
+## Evaluation Metrics
+
+| Metric | What it measures |
+|---|---|
+| mAP@0.5:0.95 | Detection accuracy across IoU thresholds (COCO standard) |
+| mAP@0.5 | Detection recall at 50% IoU |
+| per-class AP50 | Per-species detection quality |
+| mIoU | Mean segmentation overlap across all classes |
+| Dice | Harmonic mean of precision/recall at pixel level |
+| Pixel accuracy | Fraction of correctly classified pixels |
+
+Weights and full benchmark results will be published following paper submission.
+
+---
+
+## Quick Start
+
+### Installation
 
 ```bash
 git clone https://github.com/<your-username>/FishSegDet.git
@@ -113,70 +135,70 @@ cd FishSegDet
 pip install -r requirements.txt
 ```
 
-Requires Python ≥ 3.9 and PyTorch ≥ 2.0 with CUDA.
+Requires Python ≥ 3.9, PyTorch ≥ 2.0, CUDA 11.8+.
 
----
+### Dataset Layout
 
-## Training
+```
+USIS16K/
+├── train/                          # training images
+├── val/                            # validation images
+├── test/                           # test images
+└── annotations/
+    ├── instances_train.json
+    ├── instances_val.json
+    └── instances_test.json
+```
+
+Class names are read from the annotation file automatically — no manual configuration required.
+
+### Train
 
 ```bash
-# Train with default config (ConvNeXtV2-Large, 640px, USIS dataset)
-python train.py --data ./USISDataset
+# Default: ConvNeXtV2-Large, 640px, USIS16K
+python train.py --data ./USIS16K --device cuda
 
-# Specify backbone and image size
-python train.py --data ./USISDataset --backbone convnextv2_large.fcmae_ft_in22k_in1k_384 --img-size 640
+# Faster backbone for iteration
+python train.py --data ./USIS16K --backbone convnextv2_tiny.fcmae_ft_in22k_in1k
 
 # Resume from checkpoint
-python train.py --data ./USISDataset --resume runs/exp1/last.pt
+python train.py --data ./USIS16K --resume runs/fishsegdet_20240901/best.pt
 
-# Multi-GPU (DDP)
-torchrun --nproc_per_node=2 train.py --data ./USISDataset
+# Gradient accumulation (for smaller GPUs)
+python train.py --data ./USIS16K --batch-size 8 --accum-steps 2
 ```
 
-Checkpoints and training logs are saved to `runs/<timestamp>/`.
+Checkpoints, CSV metrics log, and optional TensorBoard logs are written to `runs/fishsegdet_<timestamp>/`.
 
----
-
-## Evaluation
+### Evaluate
 
 ```bash
-# Full dataset evaluation — mAP + mIoU + Dice + per-class breakdown
-python test.py --weights runs/exp1/best.pt --data ./USISDataset --eval
+# Full test-set evaluation with per-class breakdown
+python test.py --weights runs/fishsegdet_20240901/best.pt --data ./USIS16K --eval
 
-# Save per-image overlay visualizations alongside metrics
-python test.py --weights runs/exp1/best.pt --data ./USISDataset --eval --save-vis
+# Evaluation + save overlay visualisations
+python test.py --weights runs/fishsegdet_20240901/best.pt --data ./USIS16K --eval --save-vis
 ```
 
-Reported metrics:
-- Detection: mAP@0.5, mAP@0.5:0.95, per-class AP50
-- Segmentation: mIoU, Dice, pixel accuracy, per-class IoU (top 10)
-- Summary dashboard plot saved to `runs/eval_summary.png`
-
----
-
-## Inference
+### Inference
 
 ```bash
-# Single image
-python test.py --weights runs/exp1/best.pt --image fish.jpg
+# Single image — displays result in a window
+python test.py --weights best.pt --image sample.jpg
 
-# Folder of images (overlays saved to --out-dir)
-python test.py --weights runs/exp1/best.pt --folder ./images/ --out-dir ./results/
+# Folder — saves overlays to ./results/
+python test.py --weights best.pt --folder ./images/ --out-dir ./results/
 ```
 
----
-
-## Publication Figures
+### Publication Figures
 
 ```bash
-# Generate IEEE/Springer-quality result panels (one image per class)
-python visualization_pub.py --weights runs/exp1/best.pt --data ./USISDataset
+# One representative image per class, IEEE/Springer layout
+python visualization_pub.py --weights best.pt --data ./USIS16K
 
-# Export as PDF (600 dpi, camera-ready)
-python visualization_pub.py --weights runs/exp1/best.pt --data ./USISDataset --format pdf
+# Camera-ready PDF at 600 dpi
+python visualization_pub.py --weights best.pt --data ./USIS16K --format pdf
 ```
-
-Outputs colorblind-safe overlays (Paul Tol palette) with feathered mask edges on a black background.
 
 ---
 
@@ -184,28 +206,26 @@ Outputs colorblind-safe overlays (Paul Tol palette) with feathered mask edges on
 
 ```
 FishSegDet/
-├── fishsegdet/               # Core package
-│   ├── config.py             # Config dataclass, global CFG, class maps, colours
+├── fishsegdet/                     # installable Python package
+│   ├── config.py                   # Config dataclass · CFG singleton · class maps
 │   ├── models/
-│   │   ├── blocks.py         # ConvBN, DWConv (shared building blocks)
-│   │   ├── backbone.py       # TimmBackbone (ConvNeXtV2), SwinBackbone
-│   │   ├── neck.py           # BiFPN — bidirectional multi-scale feature pyramid
-│   │   ├── heads.py          # DetectHead (DFL), ASPP, FPNSegHead
-│   │   └── detector.py       # FishSegDet end-to-end model, build_model()
+│   │   ├── blocks.py               # ConvBN, DWConv  (shared primitives)
+│   │   ├── backbone.py             # TimmBackbone  (any timm model, default ConvNeXtV2-L)
+│   │   ├── neck.py                 # BiFPN  (weighted bidirectional FPN)
+│   │   ├── heads.py                # DetectHead (DFL) · ASPP · FPNSegHead
+│   │   └── detector.py             # FishSegDet · build_model()
 │   ├── data/
-│   │   ├── preprocessing.py  # UnderwaterPreprocessor (WB → CLAHE → gamma)
-│   │   ├── augmentations.py  # get_train / get_val / get_heavy transforms
-│   │   ├── datasets.py       # BrackishDataset (YOLO), USISDataset (COCO), MosaicDataset
-│   │   └── loaders.py        # configure_dataset(), create_dataloaders()
+│   │   ├── preprocessing.py        # UnderwaterPreprocessor  (WB → CLAHE → γ)
+│   │   ├── augmentations.py        # get_train · get_val · get_heavy transforms
+│   │   ├── datasets.py             # USISDataset (COCO) · MosaicDataset
+│   │   └── loaders.py              # configure_dataset() · create_dataloaders()
 │   ├── losses/
-│   │   └── detection.py      # FishSegDetLoss (TAL + DFL + IoU-aware cls + Dice)
-│   ├── engine/
-│   │   └── inference.py      # FishSegDetInference — preprocess, DFL decode, NMS, visualize
-│   └── utils/
-│       └── masks.py          # generate_masks_from_bboxes()
-├── train.py                  # Training entry point (phases, AMP, EMA, CSV logging)
-├── test.py                   # Evaluation + single-image / folder inference
-├── visualization_pub.py      # Publication-quality result figures (IEEE / Springer)
+│   │   └── detection.py            # FishSegDetLoss  (TAL · DFL · IoU-aware · Dice)
+│   └── engine/
+│       └── inference.py            # FishSegDetInference  (preprocess · decode · NMS · visualise)
+├── train.py                        # training entry point
+├── test.py                         # evaluation and inference entry point
+├── visualization_pub.py            # publication-quality qualitative results
 ├── requirements.txt
 └── README.md
 ```
@@ -214,12 +234,14 @@ FishSegDet/
 
 ## Requirements
 
-See [requirements.txt](requirements.txt).
-
-Core dependencies: `torch`, `torchvision`, `timm`, `albumentations`, `opencv-python`, `pycocotools`, `tqdm`, `matplotlib`.
+```
+torch>=2.0.0       torchvision>=0.15.0    timm>=0.9.0
+albumentations>=1.3.0    opencv-python>=4.7.0    pycocotools>=2.0.6
+numpy>=1.24.0      tqdm>=4.65.0           matplotlib>=3.7.0
+```
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
