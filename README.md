@@ -106,11 +106,11 @@ FishSegDet is evaluated against two strong YOLO baselines of comparable scale on
 
 | Model | Params | mAP | mAP₅₀ | mIoU | Dice | Precision | Recall | Pixel Acc |
 |---|---|---|---|---|---|---|---|---|
-| YOLOv10l-seg | 24.4 M | 64.1 % | 85.5 % | 84.32 % | 83.92 % | 82.40 % | 85.50 % | 91.00 % |
-| YOLOv11l-seg | 27.7 M | 67.3 % | 88.0 % | 86.45 % | 86.12 % | 85.27 % | 87.00 % | 93.25 % |
-| **FishSegDet (Ours)** | **204.75 M** | **70.0 %** | **95.1 %** | **93.4 %** | **94.39 %** | **94.69 %** | **94.09 %** | **99.1 %** |
+| YOLOv10l-seg \[64\] | ~24.4 M | 64.10 % | 85.50 % | 84.32 % | 83.92 % | 82.40 % | 85.50 % | 91.00 % |
+| YOLOv11l-seg \[65\] | ~27.71 M | 67.30 % | 88.00 % | 86.45 % | 86.12 % | 85.27 % | 87.00 % | 93.25 % |
+| **FishSegDet (Ours)** | **204.75 M** | **74.34 %** | **97.73 %** | **94.41 %** | **95.84 %** | **95.88 %** | **96.04 %** | **99.30 %** |
 
-FishSegDet outperforms YOLOv11l-seg by **+2.7 pp mAP**, **+7.1 pp mAP₅₀**, **+6.95 pp mIoU**, and **+8.27 pp Dice** — while achieving 99.1 % pixel accuracy, indicating near-perfect background suppression in challenging underwater conditions.
+FishSegDet sets a new best on every metric. Against YOLOv11l-seg — the strongest baseline — it achieves **+7.04 pp mAP**, **+9.73 pp mAP₅₀**, **+7.96 pp mIoU**, **+9.72 pp Dice**, and **+6.05 pp PA**, while using 204.75 M parameters compared to 27.71 M. The 99.30 % pixel accuracy reflects near-perfect background suppression even in turbid, low-contrast underwater conditions.
 
 ---
 
