@@ -262,7 +262,7 @@ class FishSegDetLoss(nn.Module):
 
         mr    = F.interpolate(seg_masks.unsqueeze(1).float(),
                               size=semantic.shape[2:], mode="nearest").squeeze(1).long()
-        seg_l = self.seg_ce(semantic, mr) + self.seg_w * self.seg_dice(semantic, mr)
+        seg_l = self.seg_w * (self.seg_ce(semantic, mr) + self.seg_dice(semantic, mr))
 
         total = cls_l + box_l + dfl_l + seg_l
         return {"total": total, "cls": cls_l, "box": box_l, "dfl": dfl_l, "seg": seg_l}

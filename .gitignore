@@ -1,11 +1,56 @@
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+.Python
 *.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
 .venv/
 venv/
 env/
-.ipynb_checkpoints/
+.env
+
+# PyTorch / model weights
+*.pt
 *.pth
 *.ckpt
-*.pt
+*.safetensors
+
+# Training runs and outputs
+runs/
+outputs/
+results/
+logs/
+wandb/
+
+# Datasets (download separately)
+/USISDataset/
+/BrackishDataset/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# Compiled C extensions
+*.so
+*.dll
+
+# Coverage
+.coverage
+htmlcov/
