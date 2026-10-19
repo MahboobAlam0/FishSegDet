@@ -29,7 +29,7 @@ FishSegDet produces both outputs in a single forward pass.
 FishSegDet is a **single-stage model** that simultaneously:
 
 - Predicts a bounding box for every object in the frame, regressing each box side as a discrete distribution trained with **Distribution Focal Loss**
-- Classifies each box with **IoU-aware soft labels**, so the confidence score also estimates localisation quality, not just category recognition
+- Classifies each box with **IoU-aware soft labels**, so the confidence score also estimates localization quality, not just category recognition
 - Produces a full-resolution semantic segmentation mask with a **multi-level fusion + ASPP** decoder
 - Applies underwater-specific preprocessing (white balance → CLAHE → gamma) to every input image, at both training and inference time
 
@@ -41,7 +41,7 @@ It is trained on **USIS16K** with a three-phase curriculum and class-balanced sa
 
 ### Overview
 
-![FishSegDet Architecture](assets/architecture_overview.png)
+![FishSegDet Architecture](assets/Overall_architecture.drawio.png)
 
 ### Component Diagrams
 
