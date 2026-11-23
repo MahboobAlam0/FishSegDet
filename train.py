@@ -40,6 +40,7 @@ from fishsegdet import (
     USIS_CLASSES,
     USISDataset,
 )
+from fishsegdet.utils.seed import seed_everything
 
 try:
     from plot_metrics import plot_metrics as _plot_metrics
@@ -552,6 +553,10 @@ def main():
     pa.add_argument("--output",         default=None)
     pa.add_argument("--compile",        action="store_true",
                     help="Enable torch.compile (PyTorch 2.x)")
+    pa.add_argument("--seed",           type=int, default=None,
+                    help="Seed Python/NumPy/PyTorch and the DataLoader for repeatable runs "
+                         "(default: unseeded, as in the reported results). GPU runs can still "
+                         "differ slightly because cudnn.benchmark picks kernels per run.")
     a = pa.parse_args()
 
     CFG.dataset_root  = a.data
@@ -564,6 +569,10 @@ def main():
     CFG.phase2_epochs = a.phase2_epochs
     CFG.phase3_epochs = a.phase3_epochs
     CFG.backbone      = a.backbone
+
+    if a.seed is not None:
+        seed_everything(a.seed)
+        print(f"Seeded Python, NumPy and PyTorch with {a.seed}")
 
     if a.device.startswith("cuda"):
         torch.backends.cudnn.benchmark              = True
@@ -594,7 +603,7 @@ def main():
 
     print("Creating dataloaders...")
     train_loader, val_loader, _ = create_dataloaders(
-        a.data, a.img_size, a.batch_size, a.workers)
+        a.data, a.img_size, a.batch_size, a.workers, seed=a.seed)
 
     print(f"Building model ({CFG.num_classes} classes, backbone={CFG.backbone})...")
     model = build_model(

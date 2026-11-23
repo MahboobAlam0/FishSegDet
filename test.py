@@ -300,7 +300,8 @@ def plot_eval_summary(metrics, class_names, save_path=None, fmt="png", dpi=150):
 # ============================================================================
 
 def _confusion_update(pm_np, gm_np, nc, tp, fp, fn):
-    """O(H*W) confusion matrix update — avoids 159 full-mask scans per image."""
+    """O(H*W) confusion matrix update — avoids 159 full-mask scans per image
+    (158 USIS16K categories + background)."""
     pm_flat = pm_np.ravel().astype(np.int64)
     gm_flat = gm_np.ravel().astype(np.int64)
     n = nc + 1
@@ -407,7 +408,7 @@ def evaluate_dataset(inf, data_root, split="test", save_vis=False, out_dir=None,
             tp_px += int((pm_np == gm_np).sum())
             tot_px += gm_np.size
 
-            # O(H*W) confusion matrix — replaces 159-iteration GPU loop
+            # O(H*W) confusion matrix — replaces 159-iteration GPU loop (158 classes + background)
             _confusion_update(pm_np, gm_np, nc, tp, fp, fn)
 
             # Per-class IoU for this image (incremental mean over images)

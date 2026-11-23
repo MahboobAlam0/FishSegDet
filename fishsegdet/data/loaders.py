@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Optional
 
+import torch
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from ..config import CFG, USIS_CLASSES, CLASS_TO_IDX
 from .augmentations import get_train_transforms, get_val_transforms
 from .datasets import USISDataset, MosaicDataset
+from ..utils.seed import seed_worker
 
 _configured_roots = set()
 
@@ -51,9 +54,11 @@ def configure_dataset(root: str, split: str = "train") -> None:
 
 
 def create_dataloaders(root: str, img_size: int = 640, batch_size: int = 16,
-                        num_workers: int = 4, mosaic_prob: float = 0.5):
+                        num_workers: int = 4, mosaic_prob: float = 0.5,
+                        seed: Optional[int] = None):
     """Returns (train_loader, val_loader, test_loader); test_loader is None
-    if instances_test.json isn't present."""
+    if instances_test.json isn't present. With `seed`, the sampler and the
+    worker processes are seeded too; without it, behaviour is unchanged."""
     configure_dataset(root, split="train")
 
     train_ds = MosaicDataset(root, "train", img_size,
@@ -66,11 +71,15 @@ def create_dataloaders(root: str, img_size: int = 640, batch_size: int = 16,
 
     # class-balanced sampling: weight = 1/sqrt(freq) of the rarest class in each image
     sample_weights = train_ds.compute_sample_weights()
-    train_sampler = WeightedRandomSampler(sample_weights, num_samples=len(train_ds), replacement=True)
+    generator = torch.Generator().manual_seed(seed) if seed is not None else None
+    seeded = {"worker_init_fn": seed_worker, "generator": generator} if seed is not None else {}
+    train_sampler = WeightedRandomSampler(sample_weights, num_samples=len(train_ds), replacement=True,
+                                          generator=generator)
 
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, sampler=train_sampler, drop_last=True,
         num_workers=num_workers, pin_memory=True, collate_fn=USISDataset.collate_fn,
+        **seeded,
     )
     val_loader = DataLoader(
         val_ds, batch_size=batch_size, shuffle=False, drop_last=False,

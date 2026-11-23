@@ -74,7 +74,7 @@ It is trained on **USIS16K** with a three-phase curriculum and class-balanced sa
 | Assignment | TAL, topk=13, α=0.5, β=6 | Joint alignment metric (cls^α × IoU^β) selects anchors that are both well-classified and well-localised, rather than relying on spatial rules alone |
 | Classification | IoU-aware soft labels (varifocal-style weighting) | Training target = IoU of the predicted box, so sigmoid(cls) learns to rank detections by localisation quality; no separate centerness branch is needed |
 | Box loss | CIoU (λ=3) | Penalises centre distance and aspect-ratio deviation, not just overlap area |
-| Segmentation | P3–P6 fusion + ASPP, ×8 upsampling decoder | ASPP (dilations 1, 6, 12, 18 + image-level pooling) captures multi-scale context without losing resolution |
+| Segmentation | P3–P6 fusion + ASPP, ×8 upsampling decoder | ASPP (a 1×1 branch, dilations 6, 12, 18 and image-level pooling) captures multi-scale context without losing resolution. The head also computes a 128-channel prototype map, but no loss or inference step uses it; masks come from the semantic branch only |
 | Seg loss | CE (label smoothing 0.05) + Dice, λ=1.5 | Dice directly optimises region overlap; CE provides per-pixel supervision |
 
 ---
@@ -99,6 +99,7 @@ It is trained on **USIS16K** with a three-phase curriculum and class-balanced sa
 - **Optimiser:** AdamW with fused CUDA kernels, weight decay 0.05, gradient clipping at norm 10
 - **AMP + GradScaler:** mixed precision on every forward/backward pass
 - **EMA:** exponential moving average (decay 0.9999) kept on a CPU shadow copy and saved in each checkpoint as `ema_state_dict`
+- **Seeding:** off by default, which is how the reported results were trained. `--seed N` seeds Python, NumPy and PyTorch, the class-balanced sampler and the DataLoader workers; GPU runs can still differ slightly because `cudnn.benchmark` is on
 
 ---
 
@@ -230,6 +231,9 @@ python train.py --data ./USIS16K --resume runs/fishsegdet_<timestamp>/best.pt
 
 # Gradient accumulation (for smaller GPUs)
 python train.py --data ./USIS16K --batch-size 8 --accum-steps 2
+
+# Repeatable run (seeds Python, NumPy, PyTorch and the data loading)
+python train.py --data ./USIS16K --seed 42
 ```
 
 Checkpoints, a CSV metrics log and optional TensorBoard logs are written to `runs/fishsegdet_<timestamp>/`.
@@ -285,8 +289,10 @@ FishSegDet/
 │   │   └── loaders.py              # configure_dataset() · create_dataloaders()
 │   ├── losses/
 │   │   └── detection.py            # FishSegDetLoss  (TAL · DFL · IoU-aware cls · CE + Dice)
-│   └── engine/
-│       └── inference.py            # FishSegDetInference  (preprocess · decode · NMS · visualise)
+│   ├── engine/
+│   │   └── inference.py            # FishSegDetInference  (preprocess · decode · NMS · visualise)
+│   └── utils/
+│       └── seed.py                 # seed_everything() · seed_worker()  (train.py --seed)
 ├── train.py                        # training entry point
 ├── test.py                         # evaluation and inference entry point
 ├── visualization_pub.py            # publication-quality qualitative results

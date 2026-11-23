@@ -12,7 +12,10 @@ class DetectHead(nn.Module):
     YOLOv8-style DFL head.
     cls branch  → nc logits per anchor
     reg branch  → 4 × (reg_max+1) DFL logits per anchor
-    Score at inference = sigmoid(cls) * iou  (no centerness)
+    Score at inference = sigmoid(cls). There is no separate IoU branch and no
+    centerness: the cls logits are trained toward the IoU of the predicted box
+    (soft labels, see losses/detection.py), so sigmoid(cls) already reflects
+    localisation quality.
     """
     def __init__(self, ic, nc, reg_max=16, num_convs=4, num_levels=4):
         super().__init__()
@@ -58,6 +61,8 @@ class DetectHead(nn.Module):
 
 
 class ASPP(nn.Module):
+    """1x1 branch + 3x3 dilated branches (dilation 6, 12, 18) + image-level
+    pooling, concatenated and projected back to out_ch."""
     def __init__(self, in_ch, out_ch, dilations=(1, 6, 12, 18)):
         super().__init__()
         self.branches = nn.ModuleList([
@@ -80,6 +85,9 @@ class FPNSegHead(nn.Module):
         self.fuse_p6 = ConvBN(ic, ic, 1)
         self.fuse_cv = ConvBN(ic * 4, hidden, 1)
         self.aspp    = ASPP(hidden, hidden)
+        # Prototype branch (YOLACT-style mask basis). Its output ("prototypes")
+        # is returned by the model but not used by any loss or by inference;
+        # masks come from sem_net only. Kept so existing checkpoints still load.
         self.proto_net = nn.Sequential(
             ConvBN(hidden, hidden, 3),
             nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
